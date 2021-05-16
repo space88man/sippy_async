@@ -81,7 +81,7 @@ class Cancellable:
     """
 
     def __init__(self, ed, task):
-        self.task = task
+        self._task = task
         self.ed = ed
         self._tg = None
 
@@ -94,6 +94,10 @@ class Cancellable:
 
     def go(self):
         self.ed.go_timer(self)
+
+    async def run_task(self):
+        async with create_task_group() as self._tg:
+            return await self._task()
 
 
 def _twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
@@ -114,7 +118,6 @@ class EventDispatcher3:
         self.servers = []
         self.tsend, self.trecv = (None, None)
 
-
     def go_timer(self, k):
         """Schedules a timer if the event loop is running;
         else just add it to a pending list.
@@ -125,14 +128,6 @@ class EventDispatcher3:
         else:
             self.tpending.append(k)
 
-    async def wrapper(self, k):
-        """Creates a task group around a coroutine so that
-        it can be cancelled.
-        """
-
-        async with create_task_group() as k._tg:
-            await k.task()
-
     async def _timer_wait(self):
         """This coroutine is also used to signal to exit the loop.
         Just set self.inbox = None and set self._timer
@@ -142,7 +137,7 @@ class EventDispatcher3:
             async for item in self.trecv:
                 if item is None:
                     break
-                self.tg.start_soon(self.wrapper, item)
+                self.tg.start_soon(item.run_task)
 
     async def aloop(self):
         """Runs event loop forever."""
@@ -155,12 +150,11 @@ class EventDispatcher3:
 
         async with create_task_group() as self.tg:
             # schedule pending timers
-            for k in self.tpending:
-                self.tg.start_soon(self.wrapper, k)
-            self.tpending = []
-            for item in self.servers:
-                self.tg.start_soon(item.run)
-            self.servers = []
+            while self.tpending:
+                self.tg.start_soon(self.tpending.pop().run_task)
+
+            while self.servers:
+                self.tg.start_soon(self.servers.pop().run)
 
             # this task runs the event loop forever...
             self.tg.start_soon(self._timer_wait)
