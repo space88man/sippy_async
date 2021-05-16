@@ -90,13 +90,13 @@ class Cancellable:
             assert self._tg
             self._tg.cancel_scope.cancel()
         else:
-            self.ed.listeners.remove(self)
+            self.ed.tpending.remove(self)
 
     def go(self):
         self.ed.go_timer(self)
 
 
-def twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
+def _twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
     async def _task():
         if abs_time:
             await sleep(max(ival - MonoTime(), 0.0))
@@ -110,10 +110,10 @@ def twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
 class EventDispatcher3:
     def __init__(self, freq=100.0):
         self.is_running = False
-        self.listeners = []
+        self.tpending = []
         self.servers = []
+        self.tsend, self.trecv = (None, None)
 
-        self.send, self.receive = (None, None)
 
     def go_timer(self, k):
         """Schedules a timer if the event loop is running;
@@ -121,9 +121,9 @@ class EventDispatcher3:
         """
 
         if self.is_running:
-            self.send.send_nowait(k)
+            self.tsend.send_nowait(k)
         else:
-            self.listeners.append(k)
+            self.tpending.append(k)
 
     async def wrapper(self, k):
         """Creates a task group around a coroutine so that
@@ -138,8 +138,8 @@ class EventDispatcher3:
         Just set self.inbox = None and set self._timer
         """
 
-        async with self.receive:
-            async for item in self.receive:
+        async with self.trecv:
+            async for item in self.trecv:
                 if item is None:
                     break
                 self.tg.start_soon(self.wrapper, item)
@@ -150,14 +150,14 @@ class EventDispatcher3:
         # overloaded member: used to schedule timers
         # and exit the loop if self.inbox = None
 
-        self.send, self.receive = create_memory_object_stream(256)
         self.is_running = True
+        self.tsend, self.trecv = create_memory_object_stream(256)
 
         async with create_task_group() as self.tg:
             # schedule pending timers
-            for k in self.listeners:
+            for k in self.tpending:
                 self.tg.start_soon(self.wrapper, k)
-            self.listeners = []
+            self.tpending = []
             for item in self.servers:
                 self.tg.start_soon(item.run)
             self.servers = []
@@ -169,7 +169,7 @@ class EventDispatcher3:
         run(self.aloop, backend=os.getenv("SIPPY_ASYNC_BACKEND", "asyncio"))
 
     def regTimer(self, timeout_cb, ival, nticks=1, abs_time=False, *cb_params):
-        timer = twrapper(self, timeout_cb, ival, nticks, abs_time, *cb_params)
+        timer = _twrapper(self, timeout_cb, ival, nticks, abs_time, *cb_params)
         return timer
 
     def regServer(self, obj):
