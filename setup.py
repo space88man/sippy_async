@@ -7,6 +7,7 @@ setup(
     packages=find_packages("src"),
     package_dir={"": "src"},
     install_requires=[
+        "anyio==3.0.1"
     ],
     entry_points={
     }

@@ -1,17 +1,20 @@
 import os
 import socket
-
 from sippy.Time.MonoTime import MonoTime
-
-
-from anyio import (Event, create_task_group, sleep, run, create_memory_object_stream,
-                   create_udp_socket, create_task_group, create_memory_object_stream, run)
+from anyio import (
+    create_task_group,
+    sleep,
+    run,
+    create_memory_object_stream,
+    create_udp_socket,
+)
 import logging
 
 
 STATE = {"UDP_ID": 0}
 
 LOG = logging.getLogger("sippy-async")
+
 
 class AsyncUDPServer:
     uopts = None
@@ -28,12 +31,14 @@ class AsyncUDPServer:
         ED2.regServer(self)
 
     async def run(self):
-        LOG.info("UDP server starting: %d, %s", self.id, laddress:=self.uopts.laddress)
+        LOG.info(
+            "UDP server starting: %d, %s", self.id, laddress := self.uopts.laddress
+        )
 
         async with create_task_group() as self._tg:
             async with await create_udp_socket(
-                    local_host=laddress[0],
-                    local_port=laddress[1],
+                local_host=laddress[0],
+                local_port=laddress[1],
             ) as self.sock:
                 self._tg.start_soon(self.handle_outgoing)
                 async for packet, (host, port) in self.sock:
@@ -44,7 +49,9 @@ class AsyncUDPServer:
                     try:
                         self.uopts.data_callback(packet, (host, port), self, MonoTime())
                     except Exception:
-                        LOG.exception("Udp_server: unhandled exception when processing incoming data")
+                        LOG.exception(
+                            "Udp_server: unhandled exception when processing incoming data"
+                        )
 
     def send_to(self, data, address):
         """Strip [] from IPv6 literal addresses"""
@@ -100,8 +107,7 @@ def twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
     return Cancellable(ed, _task)
 
 
-class EventDispatcher3():
-
+class EventDispatcher3:
     def __init__(self, freq=100.0):
         self.is_running = False
         self.listeners = []
@@ -139,7 +145,7 @@ class EventDispatcher3():
                 self.tg.start_soon(self.wrapper, item)
 
     async def aloop(self):
-        """ Runs event loop forever."""
+        """Runs event loop forever."""
 
         # overloaded member: used to schedule timers
         # and exit the loop if self.inbox = None
@@ -159,7 +165,6 @@ class EventDispatcher3():
             # this task runs the event loop forever...
             self.tg.start_soon(self._timer_wait)
 
-
     def loop(self):
         run(self.aloop, backend=os.getenv("SIPPY_ASYNC_BACKEND", "asyncio"))
 
@@ -178,6 +183,7 @@ class EventDispatcher3():
 
 ED2 = EventDispatcher3()
 from sippy.Core import EventDispatcher
+
 del EventDispatcher.ED2
 
 EventDispatcher.ED2 = ED2
