@@ -197,3 +197,12 @@ EventDispatcher.ED2 = ED2
 from sippy import Udp_server
 
 Udp_server.Udp_server = AsyncUDPServer
+
+
+if __name__ == "__main__":
+    from sippy.Time import Timeout
+    Timeout.testTimeout()
+    Timeout.testTimeoutAbsMono()
+
+    from sippy.Udp_server import self_test
+    self_test().run()
