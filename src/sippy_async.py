@@ -73,17 +73,19 @@ class AsyncUDPServer:
 
 
 class Cancellable:
-    """Wrapper around a coroutine to allow
+    """Duck-cousin of sippy.Core.EventDispatcher.EventListener
+    Wrapper around a coroutine to allow
     cancellation.
 
     self._tg is set once the coroutine is scheduled
     and is used for cancellation.
     """
 
-    def __init__(self, ed, task):
+    def __init__(self, ed, task, nticks):
         self._task = task
         self.ed = ed
         self._tg = None
+        self.nticks = nticks
 
     def cancel(self):
         if self.ed.is_running:
@@ -97,7 +99,13 @@ class Cancellable:
 
     async def run_task(self):
         async with create_task_group() as self._tg:
-            return await self._task()
+            await self._task()
+
+            if self.nticks is not None and (self.nticks == -1 or self.nticks > 1):
+                # reschedule myself
+                if self.nticks > 1:
+                    self.nticks -= 1
+                await self.ed.tsend.send(self)
 
 
 def _twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
@@ -108,10 +116,12 @@ def _twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
             await sleep(ival)
         timeout_cb(*cb_params)
 
-    return Cancellable(ed, _task)
+    return Cancellable(ed, _task, nticks)
 
 
 class EventDispatcher3:
+    """Duck-cousin of sippy.Core.EventDispatcher.EventDispatcher"""
+
     def __init__(self, freq=100.0):
         self.is_running = False
         self.tpending = []
@@ -162,7 +172,9 @@ class EventDispatcher3:
     def loop(self):
         run(self.aloop, backend=os.getenv("SIPPY_ASYNC_BACKEND", "asyncio"))
 
-    def regTimer(self, timeout_cb, ival, nticks=1, abs_time=False, *cb_params):
+    def regTimer(self, timeout_cb, ival, nticks, abs_time, *cb_params):
+        if nticks == 0:
+            return
         timer = _twrapper(self, timeout_cb, ival, nticks, abs_time, *cb_params)
         return timer
 
