@@ -79,7 +79,7 @@ How do I run the `sippy.Udp_server` testsuite?
 import sippy_async
 from sippy.Udp_server import self_test
 
-self_test.run()
+self_test().run()
 
 ```
 
