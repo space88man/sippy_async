@@ -151,7 +151,7 @@ class EventDispatcher3:
         async with create_task_group() as self.tg:
             # schedule pending timers
             while self.tpending:
-                self.tg.start_soon(self.tpending.pop().run_task)
+                await self.tsend.send(self.tpending.pop())
 
             while self.servers:
                 self.tg.start_soon(self.servers.pop().run)
