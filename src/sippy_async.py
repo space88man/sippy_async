@@ -8,6 +8,8 @@ from anyio import (
     create_memory_object_stream,
     create_udp_socket,
 )
+from typing import Union
+
 import logging
 
 
@@ -30,6 +32,14 @@ class AsyncUDPServer:
         STATE["UDP_ID"] += 1
         ED2.regServer(self)
 
+    async def wrap_callback(self, packet, host, port):
+        try:
+            await self.uopts.data_callback(packet, (host, port), self, MonoTime())
+        except Exception:
+            LOG.exception(
+                "Udp_server: unhandled exception when processing incoming data"
+            )
+
     async def run(self):
         LOG.info(
             "UDP server starting: %d, %s", self.id, laddress := self.uopts.laddress
@@ -46,12 +56,7 @@ class AsyncUDPServer:
                     # the callback expects [] around IPv6 literal addresses
                     if self.uopts.family == socket.AF_INET6:
                         host = "[" + host + "]"
-                    try:
-                        self.uopts.data_callback(packet, (host, port), self, MonoTime())
-                    except Exception:
-                        LOG.exception(
-                            "Udp_server: unhandled exception when processing incoming data"
-                        )
+                    self._tg.start_soon(self.wrap_callback, packet, host, port)
 
     def send_to(self, data, address):
         """Strip [] from IPv6 literal addresses"""
@@ -59,6 +64,15 @@ class AsyncUDPServer:
         if self.uopts.family == socket.AF_INET6:
             address = (address[0][1:-1], address[1])
         self.qsend.send_nowait((data, address))
+
+    async def asend_to(self, packet: Union[str,bytes], address: tuple[str, int]):
+        """Strip [] from IPv6 literal addresses"""
+
+        if self.uopts.family == socket.AF_INET6:
+            address = (address[0][1:-1], address[1])
+        if isinstance(packet, str):
+            packet = packet.encode()
+        await self.socket.sendto(packet, *address)
 
     async def handle_outgoing(self):
         async with self.qrecv:

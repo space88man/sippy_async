@@ -3,3 +3,4 @@ dist/
 *-info
 *~
 *.swp
+__pycache__/
